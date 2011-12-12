@@ -248,9 +248,6 @@ int wiiuse_io_read(struct wiimote_t* wm) {
        * Clear the overlap event
        * for next time around.
        */
-      for (ii=0;ii<32;++ii) {
-        printf("%02x ",wm->event_buf[ii]);
-      }
       printf("\n");
       ResetEvent(wm->hid_overlap.hEvent);
       return 1;
