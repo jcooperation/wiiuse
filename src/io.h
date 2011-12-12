@@ -54,6 +54,11 @@ void wiiuse_cleanup_platform_fields(struct wiimote_t* wm);
 
 int wiiuse_io_read(struct wiimote_t* wm);
 int wiiuse_io_write(struct wiimote_t* wm, byte* buf, int len);
+
+#ifdef WIN32
+void wiiuse_setup_read(struct wiimote_t* wm);
+#endif
+
 /** @} */
 
 #ifdef __cplusplus

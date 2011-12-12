@@ -185,6 +185,9 @@ int wiiuse_poll(struct wiimote_t** wm, int wiimotes) {
 
 				/* clear out the event buffer */
 				memset(wm[i]->event_buf, 0, sizeof(wm[i]->event_buf));
+
+        /* enqueue another read-request */
+        wiiuse_setup_read(wm[i]);
 			} else {
 				idle_cycle(wm[i]);
 			}

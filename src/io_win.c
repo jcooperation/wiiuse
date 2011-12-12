@@ -52,6 +52,44 @@ extern "C" {
 #	endif
 #endif
 
+/*This internal variable is passed to
+  the ReadFile functions to avoid an error.
+
+  It doesn't seem to matter that they're all
+  asynchronously using the same one,
+  but we can't let the variable fall out of scope.
+  */
+static DWORD wu_dummy;
+
+/**
+  Enqueue a read on the device's 
+  stream and check for device
+  disconnect.
+*/
+void wiiuse_setup_read(struct wiimote_t* wm)
+{
+  DWORD err;
+  if (!ReadFile(wm->dev_handle, wm->event_buf, sizeof(wm->event_buf), &wu_dummy, &wm->hid_overlap)) {
+     err = GetLastError();
+     switch (err) {
+       case ERROR_HANDLE_EOF:
+       case ERROR_DEVICE_NOT_CONNECTED:
+         wiiuse_disconnected(wm);
+         break;
+       case ERROR_IO_PENDING:
+         /*Not an error, this is what we intended.*/
+         break;
+       default:
+         /*Should we report an unexpected error?*/
+         break;
+     }
+  } else {
+    /* We read a packet.  We'll deal with it when we poll next. */
+    /* WaitForSingleObject will return immediately. */
+  }
+}
+
+
 int wiiuse_find(struct wiimote_t** wm, int max_wiimotes, int timeout) {
 	GUID device_id;
 	HANDLE dev;
@@ -127,6 +165,8 @@ int wiiuse_find(struct wiimote_t** wm, int max_wiimotes, int timeout) {
 			wiiuse_handshake(wm[found], NULL, 0);
 
 			WIIUSE_INFO("Connected to wiimote [id %i].", wm[found]->unid);
+      /* Issue an initial read-request. */
+      wiiuse_setup_read(wm[found]);
 
 			++found;
 			if (found >= max_wiimotes)
@@ -176,7 +216,52 @@ void wiiuse_disconnect(struct wiimote_t* wm) {
 	WIIMOTE_DISABLE_STATE(wm, WIIMOTE_STATE_HANDSHAKE);
 }
 
+/*
+ *  This function was changed to 
+ *  make the reading be more like 
+ *  the *nix style: instead of blocking
+ *  if no data are available, we just
+ *  move on until some packets arrive.
+*/
+int wiiuse_io_read(struct wiimote_t* wm) {
+	DWORD  r;
+  int ii;
 
+	if (!wm || !WIIMOTE_IS_CONNECTED(wm))
+		return 0;
+  /* 
+   * A packet is either ready or we'll check back next loop.
+   */
+  r = WaitForSingleObject(wm->hid_overlap.hEvent, 1);
+  switch (r) {
+    case WAIT_TIMEOUT:
+      /* No sweat.  We just don't have a packet yet.*/
+      return 0;
+      break;
+    case WAIT_FAILED:
+      /* Problem. */
+      WIIUSE_WARNING("A wait error occured on reading from wiimote %i.", wm->unid);
+      return 0;
+      break;
+    case WAIT_OBJECT_0:
+      /* Got some data. 
+       * Clear the overlap event
+       * for next time around.
+       */
+      for (ii=0;ii<32;++ii) {
+        printf("%02x ",wm->event_buf[ii]);
+      }
+      printf("\n");
+      ResetEvent(wm->hid_overlap.hEvent);
+      return 1;
+      break;
+    default:
+      /* Uh oh. */      
+      break;
+  }
+  return 0;
+}
+/*
 int wiiuse_io_read(struct wiimote_t* wm) {
 	DWORD b, r;
 
@@ -184,18 +269,18 @@ int wiiuse_io_read(struct wiimote_t* wm) {
 		return 0;
 
 	if (!ReadFile(wm->dev_handle, wm->event_buf, sizeof(wm->event_buf), &b, &wm->hid_overlap)) {
-		/* partial read */
+		// partial read //
 		b = GetLastError();
 
 		if ((b == ERROR_HANDLE_EOF) || (b == ERROR_DEVICE_NOT_CONNECTED)) {
-			/* remote disconnect */
+			// remote disconnect //
 			wiiuse_disconnected(wm);
 			return 0;
 		}
 
 		r = WaitForSingleObject(wm->hid_overlap.hEvent, wm->timeout);
 		if (r == WAIT_TIMEOUT) {
-			/* timeout - cancel and continue */
+			// timeout - cancel and continue //
 
 			if (*wm->event_buf)
 				WIIUSE_WARNING("Packet ignored.  This may indicate a problem (timeout is %i ms).", wm->timeout);
@@ -215,7 +300,7 @@ int wiiuse_io_read(struct wiimote_t* wm) {
 	ResetEvent(wm->hid_overlap.hEvent);
 	return 1;
 }
-
+*/
 
 int wiiuse_io_write(struct wiimote_t* wm, byte* buf, int len) {
 	DWORD bytes;
