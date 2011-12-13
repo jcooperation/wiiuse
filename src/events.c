@@ -820,6 +820,10 @@ void handshake_expansion(struct wiimote_t* wm, byte* data, uint16_t len) {
 					/* wiiuse_motion_plus_handshake(wm, data, len); */
 					wm->event = WIIUSE_MOTION_PLUS_ACTIVATED;
 					break;
+        case EXP_ID_CODE_WII_BOARD:
+          if (wii_board_handshake(wm,&wm->exp.wb,data,len))
+            wm->event = WIIUSE_WII_BOARD_CTRL_INSERTED;
+          break;
 				default:
 					WIIUSE_WARNING("Unknown expansion type. Code: 0x%x", id);
 					break;

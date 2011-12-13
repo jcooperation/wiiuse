@@ -238,22 +238,24 @@ int wiiuse_io_read(struct wiimote_t* wm) {
       /* No sweat.  We just don't have a packet yet.*/
       return 0;
       break;
-    case WAIT_FAILED:
-      /* Problem. */
-      WIIUSE_WARNING("A wait error occured on reading from wiimote %i.", wm->unid);
-      return 0;
-      break;
     case WAIT_OBJECT_0:
       /* Got some data. 
        * Clear the overlap event
        * for next time around.
        */
-      printf("\n");
       ResetEvent(wm->hid_overlap.hEvent);
       return 1;
       break;
+    case WAIT_FAILED:
+      /* Problem. */
+      WIIUSE_WARNING("A wait error occured on reading from wiimote %i.", wm->unid);
+      /* Fall through */
     default:
       /* Uh oh. */      
+      CancelIo(wm->dev_handle);
+      ResetEvent(wm->hid_overlap.hEvent);
+      wiiuse_setup_read(wm);
+      return 0;
       break;
   }
   return 0;
